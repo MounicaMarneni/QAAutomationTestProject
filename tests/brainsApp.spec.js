@@ -25,17 +25,32 @@ test.describe('brains app', () => {
         expect(timestampRegex.test(toolTip)).toBe(true);
     });
 
-    test('validate PDF download report', async ({ page }) => {
+    test('validate PDF download report', async ({ page, browserName, headless }) => {
         const qaProjectPage = new QAProjectPage(page);
 
         await qaProjectPage.clickOnActionToggleButton();
         await qaProjectPage.clickOnDownloadButton();
-        const [download] = await Promise.all([
-            page.waitForEvent('popup'),
-            page.locator('//a[text()="Download"]').click()
-        ]);
-        const downloadUrl = download.url();
-        await expect(downloadUrl).toContain('https://qa-test.intellisense.io/file/reports');
+
+        if (browserName === 'chromium' && headless === true) {
+            const [download] = await Promise.all([
+                page.waitForEvent('download'),
+                page.locator('//a[text()="Download"]').click()
+            ]);
+            const endsWithPdf = download.suggestedFilename().endsWith('.pdf');
+            expect(endsWithPdf).toBe(true);
+        }
+        else if ((browserName === 'chromium' && headless === false) || browserName === 'firefox' || browserName === 'webkit') {
+            const [reportPage] = await Promise.all([
+                page.waitForEvent('popup'),
+                page.locator('//a[text()="Download"]').click()
+            ])
+            reportPage.on('response', response =>
+                expect(response.headers()['content-type']).toBe('application/pdf')
+            );
+            await reportPage.waitForURL(pdfUrl);
+            const reportPageUrl = reportPage.url();
+            await expect(reportPageUrl).toContain('https://qa-test.intellisense.io/file/reports');
+        }
     });
 });
 
